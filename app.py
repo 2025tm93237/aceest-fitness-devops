@@ -269,6 +269,39 @@ def create_app(db_path: Optional[str] = None) -> Flask:
         db.commit()
         return jsonify(message="client deleted"), 200
 
+    @app.post("/clients/<name>/program")
+    def generate_program(name):
+        db = get_db()
+        if db.execute("SELECT name FROM clients WHERE name = ?", (name,)).fetchone() is None:
+            return error("client not found", 404)
+        data = request.get_json(silent=True) or {}
+        program_type = data.get("program_type") or "Beginner"
+        if program_type not in PROGRAM_TEMPLATES:
+            return error(f"unknown program_type '{program_type}'", 400)
+        detail = PROGRAM_TEMPLATES[program_type][0]
+        db.execute("INSERT INTO programs (client_name, program_type, details, created_at) VALUES (?, ?, ?, ?)", (name, program_type, detail, now_text()))
+        db.commit()
+        return jsonify(name=name, program_type=program_type, program=detail), 201
+
+    @app.get("/clients/<name>/programs")
+    def list_programs(name):
+        rows = get_db().execute("SELECT program_type, details, created_at FROM programs WHERE client_name = ? ORDER BY id DESC", (name,)).fetchall()
+        if not rows and get_db().execute("SELECT name FROM clients WHERE name = ?", (name,)).fetchone() is None:
+            return error("client not found", 404)
+        return jsonify([dict(r) for r in rows]), 200
+
+    @app.get("/clients/<name>/calories")
+    def calories(name):
+        row = get_db().execute("SELECT age, gender, height_cm, weight_kg FROM clients WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            return error("client not found", 404)
+        data = request.args
+        try:
+            value = calculate_daily_calories(float(row["weight_kg"]), float(row["height_cm"]), int(row["age"]), row["gender"], data.get("activity", "moderate"))
+        except (TypeError, ValueError):
+            return error("client age, gender, height_cm and weight_kg must be valid and activity must be specified correctly", 400)
+        return jsonify(name=name, daily_calories=value), 200
+
     init_db()
     return app
 
