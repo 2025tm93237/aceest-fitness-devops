@@ -44,3 +44,28 @@ def test_login_bad_password(client):
 
 def test_login_missing_fields(client):
     assert client.post("/login", json={}).status_code == 400
+
+def test_client_create(client):
+    assert create_client(client).status_code == 201
+
+def test_client_list_and_get(client):
+    create_client(client)
+    assert len(client.get("/clients").get_json()) == 1
+    assert client.get("/clients/Ravi").get_json()["name"] == "Ravi"
+
+def test_duplicate_client(client):
+    create_client(client)
+    assert create_client(client).status_code == 409
+
+def test_client_not_found(client):
+    assert client.get("/clients/Nobody").status_code == 404
+
+def test_protected_delete_requires_role(client):
+    create_client(client)
+    assert client.delete("/clients/Ravi").status_code == 403
+
+def test_client_delete(client):
+    create_client(client)
+    client.post("/login", json={"username": "admin", "password": "admin123"})
+    assert client.delete("/clients/Ravi").status_code == 200
+    assert client.get("/clients/Ravi").status_code == 404

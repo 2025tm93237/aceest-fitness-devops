@@ -229,6 +229,46 @@ def create_app(db_path: Optional[str] = None) -> Flask:
         session.clear()
         return jsonify(message="logout successful"), 200
 
+    @app.post("/clients")
+    def add_client():
+        data = request.get_json(silent=True) or {}
+        name = data.get("name")
+        if not name:
+            return error("name is required", 400)
+        db = get_db()
+        try:
+            db.execute(
+                "INSERT INTO clients (name, age, gender, height_cm, weight_kg, goal, membership_status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Active', ?)",
+                (name, data.get("age"), data.get("gender"), data.get("height_cm"), data.get("weight_kg"), data.get("goal"), now_text()),
+            )
+            db.commit()
+        except sqlite3.IntegrityError:
+            return error(f"client '{name}' already exists", 409)
+        return jsonify(message=f"client '{name}' created"), 201
+
+    @app.get("/clients")
+    def list_clients():
+        rows = get_db().execute("SELECT * FROM clients ORDER BY name").fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+
+    @app.get("/clients/<name>")
+    def get_client(name):
+        row = get_db().execute("SELECT * FROM clients WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            return error("client not found", 404)
+        return jsonify(dict(row)), 200
+
+    @app.delete("/clients/<name>")
+    @require_role("admin", "trainer")
+    def delete_client(name):
+        db = get_db()
+        row = db.execute("SELECT id FROM clients WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            return error("client not found", 404)
+        db.execute("DELETE FROM clients WHERE name = ?", (name,))
+        db.commit()
+        return jsonify(message="client deleted"), 200
+
     init_db()
     return app
 
