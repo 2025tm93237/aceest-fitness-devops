@@ -90,3 +90,12 @@ def test_programs(client):
     assert client.get("/clients/Ravi/programs").get_json()[0]["program_type"] == "Muscle Gain"
     assert client.post("/clients/Ravi/program", json={"program_type": "Bad"}).status_code == 400
     assert client.get("/clients/Nobody/programs").status_code == 404
+
+def test_membership(client):
+    create_client(client)
+    assert client.get("/clients/Ravi/membership").get_json()["membership_status"] == "Active"
+    assert client.patch("/clients/Ravi/membership", json={"status": "Suspended"}).status_code == 403
+    client.post("/login", json={"username": "trainer", "password": "trainer123"})
+    assert client.patch("/clients/Ravi/membership", json={"status": "Suspended"}).status_code == 200
+    assert client.patch("/clients/Ravi/membership", json={"status": "Bad"}).status_code == 400
+    assert client.get("/clients/Nobody/membership").status_code == 404
