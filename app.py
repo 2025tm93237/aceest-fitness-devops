@@ -209,6 +209,26 @@ def create_app(db_path: Optional[str] = None) -> Flask:
     def health():
         return jsonify(status="ok"), 200
 
+    @app.post("/login")
+    def login():
+        data = request.get_json(silent=True) or {}
+        username, password = data.get("username"), data.get("password")
+        if not username or not password:
+            return error("username and password are required", 400)
+        db = get_db()
+        row = db.execute("SELECT username, password_hash, role FROM users WHERE username = ?", (username,)).fetchone()
+        if row is None or not check_password_hash(row["password_hash"], password):
+            return error("invalid credentials", 401)
+        session.clear()
+        session["username"] = row["username"]
+        session["role"] = row["role"]
+        return jsonify(username=row["username"], role=row["role"], message="login successful"), 200
+
+    @app.post("/logout")
+    def logout():
+        session.clear()
+        return jsonify(message="logout successful"), 200
+
     init_db()
     return app
 
