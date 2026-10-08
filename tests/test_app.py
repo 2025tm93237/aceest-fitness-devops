@@ -115,3 +115,16 @@ def test_workouts(client):
     assert client.get("/clients/Ravi/workouts").get_json()[0]["exercise_name"] == "Squat"
     assert client.post("/clients/Ravi/workouts", json={"exercise_name": "Missing"}).status_code == 404
     assert client.get("/clients/Nobody/workouts").status_code == 404
+
+def test_metrics(client):
+    create_client(client)
+    assert client.post("/clients/Ravi/metrics", json={"weight_kg": 78, "body_fat_pct": 20}).status_code == 201
+    assert client.get("/clients/Ravi/metrics").status_code == 200
+    assert client.get("/clients/Nobody/metrics").status_code == 404
+
+def test_goals(client):
+    create_client(client)
+    assert client.post("/clients/Ravi/goals", json={}).status_code == 400
+    assert client.post("/clients/Ravi/goals", json={"goal_type": "Weight", "target_value": 70}).status_code == 201
+    assert client.get("/clients/Ravi/goals").get_json()[0]["goal_type"] == "Weight"
+    assert client.get("/clients/Nobody/goals").status_code == 404

@@ -355,6 +355,44 @@ def create_app(db_path: Optional[str] = None) -> Flask:
         rows = db.execute("SELECT exercise_name, date, duration_min, calories_burned, notes FROM workouts WHERE client_name = ? ORDER BY date DESC", (name,)).fetchall()
         return jsonify([dict(r) for r in rows]), 200
 
+    @app.post("/clients/<name>/metrics")
+    def add_metrics(name):
+        db = get_db()
+        if not client_exists(db, name):
+            return error("client not found", 404)
+        data = request.get_json(silent=True) or {}
+        db.execute("INSERT INTO metrics (client_name, recorded_at, weight_kg, body_fat_pct, chest_cm, waist_cm, hip_cm, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (name, data.get("recorded_at", date.today().isoformat()), data.get("weight_kg"), data.get("body_fat_pct"), data.get("chest_cm"), data.get("waist_cm"), data.get("hip_cm"), data.get("notes", "")))
+        db.commit()
+        return jsonify(message="metrics recorded"), 201
+
+    @app.get("/clients/<name>/metrics")
+    def list_metrics(name):
+        db = get_db()
+        if not client_exists(db, name):
+            return error("client not found", 404)
+        rows = db.execute("SELECT recorded_at, weight_kg, body_fat_pct, chest_cm, waist_cm, hip_cm, notes FROM metrics WHERE client_name = ? ORDER BY recorded_at DESC", (name,)).fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+
+    @app.post("/clients/<name>/goals")
+    def add_goal(name):
+        db = get_db()
+        if not client_exists(db, name):
+            return error("client not found", 404)
+        data = request.get_json(silent=True) or {}
+        if not data.get("goal_type"):
+            return error("goal_type is required", 400)
+        db.execute("INSERT INTO goals (client_name, goal_type, target_value, target_date, status) VALUES (?, ?, ?, ?, 'Active')", (name, data["goal_type"], data.get("target_value"), data.get("target_date")))
+        db.commit()
+        return jsonify(message="goal created"), 201
+
+    @app.get("/clients/<name>/goals")
+    def list_goals(name):
+        db = get_db()
+        if not client_exists(db, name):
+            return error("client not found", 404)
+        rows = db.execute("SELECT goal_type, target_value, target_date, status FROM goals WHERE client_name = ? ORDER BY id DESC", (name,)).fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+
     @app.get("/clients/<name>/calories")
     def calories(name):
         row = get_db().execute("SELECT age, gender, height_cm, weight_kg FROM clients WHERE name = ?", (name,)).fetchone()
