@@ -290,6 +290,27 @@ def create_app(db_path: Optional[str] = None) -> Flask:
             return error("client not found", 404)
         return jsonify([dict(r) for r in rows]), 200
 
+    @app.get("/clients/<name>/membership")
+    def membership(name):
+        row = get_db().execute("SELECT membership_status FROM clients WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            return error("client not found", 404)
+        return jsonify(name=name, membership_status=row["membership_status"]), 200
+
+    @app.patch("/clients/<name>/membership")
+    @require_role("admin", "trainer")
+    def update_membership(name):
+        data = request.get_json(silent=True) or {}
+        status = data.get("status")
+        if status not in {"Active", "Suspended", "Expired"}:
+            return error("status must be Active, Suspended or Expired", 400)
+        db = get_db()
+        if db.execute("SELECT name FROM clients WHERE name = ?", (name,)).fetchone() is None:
+            return error("client not found", 404)
+        db.execute("UPDATE clients SET membership_status = ? WHERE name = ?", (status, name))
+        db.commit()
+        return jsonify(name=name, membership_status=status), 200
+
     @app.get("/clients/<name>/calories")
     def calories(name):
         row = get_db().execute("SELECT age, gender, height_cm, weight_kg FROM clients WHERE name = ?", (name,)).fetchone()
