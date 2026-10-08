@@ -311,6 +311,50 @@ def create_app(db_path: Optional[str] = None) -> Flask:
         db.commit()
         return jsonify(name=name, membership_status=status), 200
 
+    @app.get("/exercises")
+    def list_exercises():
+        rows = get_db().execute("SELECT * FROM exercises ORDER BY name").fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+
+    @app.post("/exercises")
+    @require_role("admin", "trainer")
+    def add_exercise():
+        data = request.get_json(silent=True) or {}
+        name = data.get("name")
+        if not name:
+            return error("name is required", 400)
+        try:
+            db = get_db()
+            db.execute("INSERT INTO exercises (name, muscle_group, equipment) VALUES (?, ?, ?)", (name, data.get("muscle_group"), data.get("equipment")))
+            db.commit()
+        except sqlite3.IntegrityError:
+            return error("exercise already exists", 409)
+        return jsonify(message="exercise created"), 201
+
+    def client_exists(db, name):
+        return db.execute("SELECT name FROM clients WHERE name = ?", (name,)).fetchone() is not None
+
+    @app.post("/clients/<name>/workouts")
+    def add_workout(name):
+        db = get_db()
+        if not client_exists(db, name):
+            return error("client not found", 404)
+        data = request.get_json(silent=True) or {}
+        exercise_name = data.get("exercise_name", "General")
+        if exercise_name != "General" and db.execute("SELECT name FROM exercises WHERE name = ?", (exercise_name,)).fetchone() is None:
+            return error("exercise not found", 404)
+        db.execute("INSERT INTO workouts (client_name, exercise_name, date, duration_min, calories_burned, notes) VALUES (?, ?, ?, ?, ?, ?)", (name, exercise_name, data.get("date", date.today().isoformat()), data.get("duration_min", 30), data.get("calories_burned", 0), data.get("notes", "")))
+        db.commit()
+        return jsonify(message="workout logged"), 201
+
+    @app.get("/clients/<name>/workouts")
+    def list_workouts(name):
+        db = get_db()
+        if not client_exists(db, name):
+            return error("client not found", 404)
+        rows = db.execute("SELECT exercise_name, date, duration_min, calories_burned, notes FROM workouts WHERE client_name = ? ORDER BY date DESC", (name,)).fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+
     @app.get("/clients/<name>/calories")
     def calories(name):
         row = get_db().execute("SELECT age, gender, height_cm, weight_kg FROM clients WHERE name = ?", (name,)).fetchone()

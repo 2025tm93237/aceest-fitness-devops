@@ -99,3 +99,19 @@ def test_membership(client):
     assert client.patch("/clients/Ravi/membership", json={"status": "Suspended"}).status_code == 200
     assert client.patch("/clients/Ravi/membership", json={"status": "Bad"}).status_code == 400
     assert client.get("/clients/Nobody/membership").status_code == 404
+
+def test_exercise_create_list_duplicate(client):
+    client.post("/login", json={"username": "trainer", "password": "trainer123"})
+    assert client.post("/exercises", json={"name": "Squat", "muscle_group": "Legs"}).status_code == 201
+    assert client.get("/exercises").get_json()[0]["name"] == "Squat"
+    assert client.post("/exercises", json={"name": "Squat"}).status_code == 409
+
+def test_workouts(client):
+    create_client(client)
+    client.post("/login", json={"username": "trainer", "password": "trainer123"})
+    assert client.post("/exercises", json={"name": "Squat"}).status_code == 201
+    client.post("/logout")
+    assert client.post("/clients/Ravi/workouts", json={"exercise_name": "Squat", "duration_min": 45}).status_code == 201
+    assert client.get("/clients/Ravi/workouts").get_json()[0]["exercise_name"] == "Squat"
+    assert client.post("/clients/Ravi/workouts", json={"exercise_name": "Missing"}).status_code == 404
+    assert client.get("/clients/Nobody/workouts").status_code == 404
