@@ -69,3 +69,24 @@ def test_client_delete(client):
     client.post("/login", json={"username": "admin", "password": "admin123"})
     assert client.delete("/clients/Ravi").status_code == 200
     assert client.get("/clients/Ravi").status_code == 404
+
+def test_bmi_helpers():
+    assert calculate_bmi(60, 1.6) == 23.44
+    assert bmi_category(18.4) == "Underweight"
+    assert bmi_category(24.9) == "Normal"
+    assert bmi_category(29.9) == "Overweight"
+    assert bmi_category(30) == "Obese"
+
+def test_bmi_validation_and_calories(client):
+    create_client(client, height_cm=160, weight_kg=60)
+    assert client.get("/clients/Ravi/calories?activity=moderate").status_code == 200
+    assert client.get("/clients/Ravi/calories?activity=bad").status_code == 400
+    with pytest.raises(ValueError):
+        calculate_daily_calories(60, 160, 30, "x", "moderate")
+
+def test_programs(client):
+    create_client(client)
+    assert client.post("/clients/Ravi/program", json={"program_type": "Muscle Gain"}).status_code == 201
+    assert client.get("/clients/Ravi/programs").get_json()[0]["program_type"] == "Muscle Gain"
+    assert client.post("/clients/Ravi/program", json={"program_type": "Bad"}).status_code == 400
+    assert client.get("/clients/Nobody/programs").status_code == 404
